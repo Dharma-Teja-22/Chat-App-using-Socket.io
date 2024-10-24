@@ -14,7 +14,6 @@
             flex-direction: column;
             height: 100vh;
         }
-
         #form {
             background: rgba(255, 255, 255, 0.8);
             padding: 0.5rem;
@@ -30,7 +29,6 @@
             box-shadow: 10px 10px 10px rgba(128, 128, 128, 0.808);
             border-radius: 30px;
         }
-
         #input {
             border: 2px solid #ccc;
             border-radius: 20px;
@@ -39,12 +37,10 @@
             margin: 0.25rem;
             transition: border-color 0.3s;
         }
-
         #input:focus {
             outline: none;
             border-color: #007bff;
         }
-
         #form > button {
             background: #007bff;
             border: none;
@@ -55,11 +51,9 @@
             cursor: pointer;
             transition: background-color 0.3s;
         }
-
         #form > button:hover {
             background: #0056b3;
         }
-
         #messages {
             list-style-type: none;
             margin: 0;
@@ -67,9 +61,13 @@
             overflow-y: auto;
             max-height: calc(100vh - 5rem);
             padding: 10px;
-            height: 400px;
         }
-
+        .chat {
+            border: none;
+            height: 430px;
+            margin-bottom: 32px;
+            overflow: scroll;
+        }
         #messages > li {
             padding: 10px;
             border-radius: 10px;
@@ -77,10 +75,9 @@
             max-width: 70%;
             width: fit-content;
             word-wrap: break-word;
-            margin-bottom: 10px; 
-            clear: both; 
+            margin-bottom: 10px;
+            clear: both;
         }
-
         .msg-left {
             background: #007bff;
             color: white;
@@ -89,7 +86,6 @@
             min-width: 200px;
             word-wrap: break-word;
         }
-
         .msg-right {
             background: rgba(167, 164, 164, 0.76);
             color: black;
@@ -99,7 +95,6 @@
             min-width: 200px;
             word-wrap: break-word;
         }
-
         .time {
             font-size: 12px;
             color: white;
@@ -108,11 +103,37 @@
             display: block;
             width: 100%;
         }
-
+        .voice_time{
+          font-size: 12px;
+            color: black;
+            text-align: end;
+            margin-top: 2px;
+            display: block;
+            width: 100%;
+        }
         .msg-right .time {
             color: black;
         }
-
+        .voice_msg_right
+        {
+            border: 1px gray solid;
+            background: none;
+            color: black;
+            text-align: left;
+            margin-right: auto;
+            z-index: 2;
+            min-width: 200px;
+            word-wrap: break-word;
+        }
+        .voice_msg_left{
+            border: 1px gray solid;
+            background: none;
+            color: black;
+            margin-left: auto;
+            z-index: 2;
+            min-width: 200px;
+            word-wrap: break-word;
+        }
         #head {
             display: flex;
             align-items: center;
@@ -123,31 +144,29 @@
             padding: 15px;
             overflow: hidden;
         }
-
-        .message {
-            border: none;
-            height: auto; 
-            max-width: 100%; 
-            word-wrap: break-word; 
-        }
-        
-        .user {
-            margin: 0px;
-        }
     </style>
 </head>
 <body>
     <p id="head">We Chat</p>
-    <ul id="messages"></ul>
+    <div class="chat">
+        <ul id="messages"></ul>
+    </div>
     <form id="form" action="">
         <input id="input" autocomplete="off" placeholder="Type your message..." />
         <button>Send</button>
+        <button type="button" id="record-btn">Record Audio</button>
         <button id="toggle-btn">Disconnect</button>
     </form>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const toggleButton = document.getElementById("toggle-btn");
+        const socket = io();
+        const form = document.getElementById("form");
+        const input = document.getElementById("input");
+        const messages = document.getElementById("messages");
+        let mediaRecorder;
+        let audioChunks = [];
 
         toggleButton.addEventListener("click", (e) => {
             e.preventDefault();
@@ -165,19 +184,11 @@
             return new Intl.DateTimeFormat("en-US", options).format(new Date());
         }
 
-        const socket = io();
-        const form = document.getElementById("form");
-        const input = document.getElementById("input");
-        const messages = document.getElementById("messages");
-
         form.addEventListener("submit", (e) => {
             e.preventDefault();
             if (input.value) {
                 const time = getCurrentTime();
-                messages.innerHTML += `<li class="message msg-left">
-                                                <p class="user">${input.value}</p>
-                                                <sub class="time">${time}</sub>
-                                            </li>`;
+                messages.innerHTML += `<li class="msg-left"><p>${input.value}</p><sub class="time">${time}</sub></li>`;
                 socket.emit("chat message", input.value);
                 input.value = "";
             }
@@ -185,10 +196,59 @@
 
         socket.on("chat message", (msg) => {
             const time = getCurrentTime();
-            messages.innerHTML += `<li class="message msg-right">
-                                                <p class="user">${msg}</p>
-                                                <sub class="time">${time}</sub>
-                                            </li>`;
+            messages.innerHTML += `<li class="msg-right"><p>${msg}</p><sub class="time">${time}</sub></li>`;
+            window.scrollTo(0, document.body.scrollHeight);
+        });
+
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.start();
+
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    if (audioChunks.length > 0) {
+                        const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+                        audioChunks = [];
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            const audioData = reader.result.split(',')[1];
+                            socket.emit("voice message", audioData);
+                            const time = getCurrentTime();
+                            messages.innerHTML += `<li class="voice_msg_left"><audio controls src="data:audio/wav;base64,${audioData}"></audio><sub class="voice_time">${time}</sub></li>`;
+                            window.scrollTo(0, document.body.scrollHeight);
+                        };
+                        reader.readAsDataURL(audioBlob);
+                    } else {
+                        console.warn("No audio data recorded.");
+                    }
+                };
+            } catch (error) {
+                console.error("Error accessing microphone:", error);
+                alert("Could not access the microphone. Please check your permissions.");
+            }
+        }
+
+        document.getElementById("record-btn").addEventListener("click", () => {
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+                mediaRecorder.stop();
+                document.getElementById("record-btn").innerText = "Record Audio";
+            } else {
+                startRecording();
+                document.getElementById("record-btn").innerText = "Stop Recording";
+            }
+        });
+
+        socket.on("voice message", (data) => {
+            const time = getCurrentTime();
+            const audioItem = document.createElement("li");
+            audioItem.className = "voice_msg_right"; 
+            audioItem.innerHTML = `<audio controls src="data:audio/wav;base64,${data}"></audio><sub class="voice_time">${time}</sub>`;
+            messages.appendChild(audioItem);
             window.scrollTo(0, document.body.scrollHeight);
         });
     </script>

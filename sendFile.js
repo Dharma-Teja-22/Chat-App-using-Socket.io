@@ -6,9 +6,8 @@ import { Server } from 'socket.io';
 
 const app = express();
 const server = createServer(app);
-const io = new Server(server, {
-    connectionStateRecovery: {}
-  });
+const io = new Server(server);
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 app.get('/', (req, res) => {
@@ -16,11 +15,21 @@ app.get('/', (req, res) => {
 });
 
 io.on('connection', (socket) => {
+//   console.log('A user connected:', socket.id);
   socket.on('chat message', (msg) => {
     socket.broadcast.emit('chat message', msg);
+  });
+
+  socket.on('voice message', (data, ack) => {
+    socket.broadcast.emit('voice message', data);
+    // ack({ success: true }); // Acknowledge that the message has been sent
+  });
+
+  socket.on('disconnect', () => {
+    // console.log('A user disconnected:', socket.id);
   });
 });
 
 server.listen(3000, () => {
-  console.log('server running at http://localhost:3000');
+  console.log('Server running at http://localhost:3000');
 });
